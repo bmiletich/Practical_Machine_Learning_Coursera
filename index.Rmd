@@ -1,0 +1,158 @@
+---
+title: "Practical_Machine_Learning_Human_Activity_Recognition"
+author: "Bryan Miletich"
+date: "February 5, 2017"
+output: html_document
+---
+###Introduction:
+
+This analysis was created to see if a suitable machine learning algorithm could be developed to accurately predict whether an individual is correctly performing an exercise.
+
+The dataset was generated with a variety of motion tracking devices utilizing accelerometers, magnets, and other miscellaneous tools. The tracked regions are belts, forearms, arm, and dumbbell. The sample size of individuals included in this study is 6.
+
+###Data Cleaning:
+
+The data was cleaned by removing features with incomplete data.
+The features with incomplete data tended to have only 2% available for the entire dataset, making it unreliable to perform data imputation.
+
+Furthermore, extraneous features regarding the username, timestamps, time windows, and a sequence number were removed.
+
+```{r, cache=FALSE, message=FALSE}
+library(caret)
+library(ggplot2)
+training<-read.csv(file="pml-training.csv")
+#dimensions
+#str(training)
+dim(training)
+training.classes<-NULL
+for(i in 1:dim(training)[2]){training.classes<-append(training.classes,class(training[,i]))}
+#features that are factors:
+training.factors<-names(training)[training.classes=="factor"]
+sum(as.numeric(training.classes=="factor"))
+#features that are numeric:
+training.numerics<-names(training)[training.classes=="numeric"]
+sum(as.numeric(training.classes=="numeric"))
+#features that are integer:
+training.integers<-names(training)[training.classes=="integer"]
+sum(as.numeric(training.classes=="integer"))
+
+#Are the numerics complete?
+numericNAs<-NULL
+for(i in 1:dim(training[,training.numerics])[2]){
+  pct.comp<-NULL
+  pct.comp<-sum(as.numeric(complete.cases(training[,training.numerics[i]])))/length(training[,1])
+  numericNAs<-append(numericNAs,pct.comp)
+}
+numericNAs
+training.numerics.comp<-training.numerics[numericNAs==1]
+
+#Are the factors complete?
+factorsNAs<-NULL
+for(i in 1:dim(training[,training.factors])[2]){
+  pct.comp<-NULL
+  pct.comp<-sum(as.numeric(!training[,training.factors[i]]==""))/dim(training)[1]
+  factorsNAs<-append(factorsNAs,pct.comp)
+}
+factorsNAs
+training.factors.comp<-training.factors[factorsNAs==1]
+
+#Are the integers complete?
+integersNAs<-NULL
+for(i in 1:dim(training[,training.integers])[2]){
+  pct.comp<-NULL
+  pct.comp<-sum(as.numeric(complete.cases(training[,training.integers[i]])))/dim(training)[1]
+  integersNAs<-append(integersNAs,pct.comp)
+}
+integersNAs
+training.integers.comp<-training.integers[integersNAs==1]
+
+set.seed("5432")
+#Concatenate known good features.
+training.quant<-append(training.integers.comp, training.numerics.comp)
+training.comp<-append(training.quant,training.factors.comp)
+#remove fields for timestamps, time windows, usernames, and the X seq number column
+training.features<-training.comp[-grep("^.*user|^.*time|^.*window|^X$",training.comp)]
+
+#splitting training into two sets: training, and testing.
+set.seed(5432)
+inTrain<-createDataPartition(training$classe,p=0.6,list=FALSE)
+training.sub<-training[inTrain,]
+training.sub<-training.sub[,c(training.features)]
+testing.sub<-training[-inTrain,]
+testing.sub<-testing.sub[,c(training.features)]
+```
+###Model Building Attempts:
+
+Two models were attempted in this analysis.
+
+The first model was a decision tree, and was only 48.97% accurate:
+```{r, cache=FALSE, message=FALSE}
+#Create a decision tree of training based on rpart.
+#Need to shrink set by 1/2 to fit into memory
+set.seed(5432)
+training.sub.dtree<-training.sub[createDataPartition(training.sub$classe,p=0.5,list=FALSE),]
+set.seed(5432)
+dTree.modFit<-train(classe~.,method="rpart",data=training.sub.dtree)
+
+library(rattle)
+
+fancyRpartPlot(dTree.modFit$finalModel,shadow.offset=0)
+
+dTree.predict<-predict(dTree.modFit,testing.sub)
+
+#We can see that the decision tree is only around 48.97% accurate.
+confusionMatrix(testing.sub$classe,dTree.predict)
+```
+
+
+The second model was with random forests with 4-fold cross validation specified in the train function. The "parallel" and "doParallel" libraries were necessary to have the random forest training model complete in a timely manner.
+```{r, cache=FALSE, message=FALSE}
+#Using parallel rf and formatting predictors and outcomes.
+library(mlbench)
+x=training.sub[,-53]
+y=training.sub[,53]
+library(parallel)
+library(doParallel)
+
+cluster <- makeCluster(detectCores() - 1) #leaves 1 core for OS
+registerDoParallel(cluster)
+#Train RF model
+set.seed(5432)
+train_control<-trainControl(method="cv",number=4,allowParallel=TRUE)
+rf.modFit<-train(x,y,method="rf",trControl=train_control)
+#Shut down parallel cluster
+stopCluster(cluster)
+registerDoSEQ()
+
+#Getting the variances for each variable:
+varImp(rf.modFit)
+```
+###In Sample Error and Out of Sample Error:
+The in-sample error for the random forests model was 100% accurate, which is a strong sign that this model is overfitting the data.
+```{r, cache=FALSE, message=FALSE}
+rf.predict.in<-predict(rf.modFit,training.sub)
+confusionMatrix(training.sub$classe,rf.predict.in)
+```
+The out-of-sample error was shown to be 98.08% accurate. This was with the second training subset (labeled testing.sub):
+```{r, cache=FALSE, message=FALSE}
+#Predict with random forests:
+rf.predict<-predict(rf.modFit,testing.sub)
+#we get a 99.08% accuracy with the random forests prediction model against out-of-sample test subset.
+confusionMatrix(testing.sub$classe,rf.predict)
+```
+This study only had 6 participants in its design, so I would expect the model to be somewhat more inaccurate when used outside this sample (leading to higher than measured out-of-sample errors) given the small study sample size.
+
+I am using the random forest model for predicting against the test data set below.
+
+###Predicting the test data set.
+
+These are the predicted classifications with the test data set of 20 entries:
+```{r, cache=FALSE, message=FALSE}
+testData<-read.csv(file="pml-testing.csv")
+#clean test dataframe
+testData.clean<-testData[,c(training.features[-53])]
+rf.predict.td<-predict(rf.modFit,testData.clean)
+rf.predict.td
+```
+
+The prediction accuracy with the random forests model was 100% against this test data set.
