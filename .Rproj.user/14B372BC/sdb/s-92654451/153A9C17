@@ -1,0 +1,20 @@
+{
+    "collab_server" : "",
+    "contents" : "#START: Random Forests\n\n#1. Bootstrap samples\n#2. At each split, bootstrap variables\n#3. Grow multiple trees and vote\n\n#A fancy extension of bagging and trees.\n\n#Pros: Accuracy\n#Cons:\n#1. Speed\n#2. Interpretability\n#3. Overfitting\n\n#Example of random forests\n#create training and test data sets\ndata(iris)\nlibrary(caret)\ninTrain<-createDataPartition(y=iris$Species, p=0.7, list=FALSE)\ntraining<-iris[inTrain,]\ntesting<-iris[-inTrain,]\ndim(training)\ndim(testing)\n\n#training\nmodFit<-train(Species~.,data=training,method=\"rf\",prox=TRUE)\n#the prox=TRUE gives more information\nmodFit\n\n#you can get a specific tree from the random forest with getTree\ngetTree(modFit$finalModel,k=2)\n\n#you can get \"class centers\", which are centroids for each class of predicted values.\nirisP<-classCenter(training[,c(3,4)],training$Species,modFit$finalModel$prox)\nirisP<-as.data.frame(irisP);irisP$Species<-rownames(irisP)\np<-qplot(Petal.Width,Petal.Length,col=Species,data=training)\np+geom_point(aes(x=Petal.Width,y=Petal.Length,col=Species),size=5,shape=4,data=irisP)\n\n#predicting new values with random forests\npred<-predict(modFit,testing)\ntesting$predRight<-pred==testing$Species\ntable(pred,testing$Species)\n\nqplot(Petal.Width,Petal.Length,colour=predRight,data=testing,main=\"newdata predictions\")",
+    "created" : 1481828772399.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "2896521481",
+    "id" : "153A9C17",
+    "lastKnownWriteTime" : 1481495390,
+    "last_content_update" : 1481495390,
+    "path" : "C:/Users/Bryan/Google Drive/MBA Classes/Practical Machine Learning - Coursera/Week 3/randomForests.R",
+    "project_path" : null,
+    "properties" : {
+    },
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

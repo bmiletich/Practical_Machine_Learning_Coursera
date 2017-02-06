@@ -1,0 +1,20 @@
+{
+    "collab_server" : "",
+    "contents" : "#START: Combining_Predictors Combining Predictors\n#key idea - combining predictors improves accuracy. can negatively impact interpretability/storytelling.\n\n#example: netflix recommendation engine contest winner.\n\n#this is called \"ensembling\"\n\n#Approaches:\n#1.combining similar classifiers (bagging, boosting, rf)\n#2. Model stacking and Model ensembling (input -> system1 -> output -> input -> system2 -> output)\n\n#Example 1:\nlibrary(ISLR)\ndata(Wage)\nlibrary(ggplot2)\nlibrary(caret)\n\n##remove logwage since we're trying to predict Wage with our own methods\nWage<-subset(Wage,select=-c(logwage))\n#build training, testing, and validation\ninBuild<-createDataPartition(y=Wage$wage,p=0.7,list=FALSE)\nvalidation<-Wage[-inBuild,]\nbuildData<-Wage[inBuild,]\ninTrain<-createDataPartition(y=buildData$wage,p=0.7,list=FALSE)\ntraining<-buildData[inTrain,];\ntesting<-buildData[-inTrain,]\n#make two training set models\n\nmod1<-train(wage~.,method=\"glm\",data=training)\nmod2<-train(wage~.,method=\"rf\",data=training,trControl=trainControl(method=\"cv\"),number=3)\n\n#plot the predictions\npred1<-predict(mod1,testing)\npred2<-predict(mod2,testing)\nqplot(pred1,pred2,colour=wage,data=testing)\n\n#note the plot was nearly the same for pred1 and pred2\n\n#now we combine the predictors in a new model\npredDF<-data.frame(pred1,pred2,wage=testing$wage)\n#combining here is done with generalized additive model method.\ncombModFit<-train(wage~.,method=\"gam\",data=predDF)\ncombPred<-predict(combModFit,predDF)\n\n#what is the RSS of only model1?\nsqrt(sum((pred1-testing$wage)^2))\n#879\n\n#what is the RSS of only model2?\nsqrt(sum((pred2-testing$wage)^2))\n#920\n\n#what is the RSS of the combined model1+model2?\nsqrt(sum((combPred-testing$wage)^2))\n#871\n\n#we see the combined predictor model is more accurate.\n\n#To verify, now we try the three models on the validation set.\n\npred1V<-predict(mod1,validation)\npred2V<-predict(mod2,validation)\npredVDF<-data.frame(pred1=pred1V,pred2=pred2V)\ncombPredV<-predict(combModFit,predVDF)\n\n#what are the residuals for model-validation?\n\nsqrt(sum((pred1V-validation$wage)^2))\n#1011.839\nsqrt(sum((pred2V-validation$wage)^2))\n#1038.017\nsqrt(sum((combPredV-validation$wage)^2))\n#1003.748\n\n#we can see that the combined predictor model is still superior in accuracy.\n\n#residual plot\nmodels.resid<-data.frame(pred1R=((pred1V-validation$wage)^2),pred2R=((pred2V-validation$wage)^2),combPredR=((combPredV-validation$wage)^2),x=(dim(combPredV)[1]))",
+    "created" : 1481831484990.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "4045781018",
+    "id" : "3A798C75",
+    "lastKnownWriteTime" : 1481826579,
+    "last_content_update" : 1481826579,
+    "path" : "C:/Users/Bryan/Google Drive/MBA Classes/Practical Machine Learning - Coursera/Week 4/combining_predictors_notes.R",
+    "project_path" : null,
+    "properties" : {
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}
